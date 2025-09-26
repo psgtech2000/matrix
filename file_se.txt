@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+import socket
+import ssl
+import hashlib
+
+HOST = "127.0.0.1"
+PORT = 65431
+
+# Create SSL context for server
+context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+context.load_cert_chain(certfile="server.crt", keyfile="server.key")
+context.verify_mode = ssl.CERT_REQUIRED
+context.load_verify_locations("ca.crt")
+
+print("[*] Server: Loaded server certificate and CA for verification")
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0) as sock:
+    sock.bind((HOST, PORT))
+    sock.listen(5)
+    print(f"[*] Server listening securely on {HOST}:{PORT}")
+
+    with context.wrap_socket(sock, server_side=True) as ssock:
+        conn, addr = ssock.accept()
+        print(f"[+] Connection from {addr}")
+        print("[Handshake] Server sent certificate to client")
+        print("[Handshake] Server verified client certificate (via CA)")
+        print("[Handshake] Mutual authentication successful → Secure channel established\n")
+
+        while True:
+            # Receive hash first
+            hash_data = conn.recv(64).decode().strip()  # SHA-256 hex digest length = 64
+            if not hash_data:
+                break
+            if hash_data.lower() == "exit":
+                print("[*] Client ended session.")
+                break
+
+            # Then receive file content
+            data = conn.recv(4096)
+            if not data:
+                break
+
+            msg = data.decode()
+            print("[Client sent]:", msg)
+
+            # Verify hash
+            computed_hash = hashlib.sha256(data).hexdigest()
+            if computed_hash == hash_data:
+                print("[*] Hash verified: data integrity OK\n")
+            else:
+                print("[!] Hash mismatch: data may be corrupted!\n")
+
+        conn.close()
+        print("[*] Connection closed.")

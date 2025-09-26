@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+import socket
+import ssl
+import hashlib
+
+HOST = "127.0.0.1"
+PORT = 65431
+
+# Create SSL context for client
+context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+context.load_cert_chain(certfile="client.crt", keyfile="client.key")
+context.load_verify_locations("ca.crt")
+context.check_hostname = False
+
+print("[*] Client: Loaded client certificate and CA for verification")
+
+with socket.create_connection((HOST, PORT)) as sock:
+    with context.wrap_socket(sock, server_hostname=HOST) as ssock:
+        print(f"[Handshake] Client received server certificate")
+        print("[Handshake] Client verified server certificate (via CA)")
+        print("[Handshake] Mutual authentication successful → Secure channel established\n")
+        print(f"[*] Connected securely to {HOST}:{PORT}\n")
+
+        # data = "hello server"
+        # Read file content
+
+        #echo "hello server" > message.txt
+        with open("message.txt", "rb") as f:
+            data = f.read()
+
+        # Compute SHA-256 hash
+        hash_digest = hashlib.sha256(data).hexdigest()
+        print("[*] SHA-256 of file:", hash_digest)
+
+        # Send hash first
+        ssock.sendall(hash_digest.encode())
+        # Then send file content
+        ssock.sendall(data)
+
+        # Optionally end session
+        ssock.sendall(b"exit")
+        print("[*] Client ended session.")
